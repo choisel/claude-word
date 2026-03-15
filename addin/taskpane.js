@@ -2,6 +2,10 @@
 
 const SERVER = "https://localhost:5000";
 
+let sessionId = null;
+let docMode = null;      // "full" | "summarized" | null
+let sectionCount = 0;
+
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
@@ -9,17 +13,107 @@ Office.onReady((info) => {
   if (info.host === Office.HostType.Word) {
     document.getElementById("ask-btn").addEventListener("click", onAsk);
     document.getElementById("refresh-btn").addEventListener("click", refreshSelection);
+    document.getElementById("load-doc-btn").addEventListener("click", loadDocument);
+    document.getElementById("clear-section-btn").addEventListener("click", () => {
+      document.getElementById("section-number").value = "";
+    });
     document.getElementById("question").addEventListener("keydown", (e) => {
-      // Ctrl+Enter or Cmd+Enter to submit
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         onAsk();
       }
     });
+
     refreshSelection();
-    checkServer();
+    checkServer().then(() => loadDocument());
   }
 });
+
+// ---------------------------------------------------------------------------
+// Server health
+// ---------------------------------------------------------------------------
+async function checkServer() {
+  try {
+    const resp = await fetch(`${SERVER}/health`);
+    if (resp.ok) {
+      setIndicator("idle");
+      return true;
+    }
+  } catch {}
+  setIndicator("error");
+  showError("Serveur local non joignable. Lancez start.sh et réessayez.");
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Document loading
+// ---------------------------------------------------------------------------
+async function loadDocument() {
+  setInitLabel("Lecture du document…", "loading");
+  setIndicator("busy");
+  hideError();
+
+  let fullText = "";
+  try {
+    fullText = await readFullDocument();
+  } catch (err) {
+    setInitLabel("Erreur de lecture du document", "");
+    setIndicator("error");
+    showError("Impossible de lire le document Word.");
+    console.error("readFullDocument error:", err);
+    return;
+  }
+
+  if (!fullText.trim()) {
+    setInitLabel("Document vide", "");
+    setIndicator("idle");
+    return;
+  }
+
+  try {
+    const resp = await fetch(`${SERVER}/init`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: fullText, session_id: sessionId }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    sessionId = data.session_id;
+    docMode = data.mode;
+    sectionCount = data.section_count;
+
+    const modeLabel = data.mode === "summarized" ? "résumé" : "complet";
+    const label = `${data.section_count} sections · ${data.page_count} pages · mode ${modeLabel}`;
+    setInitLabel(`Document chargé — ${label}`, "ready");
+    setDocStatus(`${data.page_count}p`);
+    setIndicator("idle");
+
+    // Clear previous chat on reload
+    document.getElementById("chat-history").innerHTML = "";
+
+  } catch (err) {
+    setInitLabel("Échec du chargement", "");
+    setIndicator("error");
+    showError(`Erreur initialisation : ${err.message}`);
+    console.error("loadDocument error:", err);
+  }
+}
+
+async function readFullDocument() {
+  return new Promise((resolve, reject) => {
+    Word.run(async (context) => {
+      const body = context.document.body;
+      body.load("text");
+      await context.sync();
+      resolve(body.text);
+    }).catch(reject);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Selection
@@ -31,29 +125,11 @@ async function refreshSelection() {
       sel.load("text");
       await context.sync();
       const text = sel.text.trim();
-      const preview = document.getElementById("selection-preview");
-      preview.textContent = text || "(aucun texte sélectionné)";
+      document.getElementById("selection-preview").textContent =
+        text || "(aucun texte sélectionné)";
     });
   } catch (err) {
     console.error("refreshSelection error:", err);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Server health check
-// ---------------------------------------------------------------------------
-async function checkServer() {
-  const indicator = document.getElementById("status-indicator");
-  try {
-    const resp = await fetch(`${SERVER}/health`, { method: "GET" });
-    if (resp.ok) {
-      setIndicator("idle");
-    } else {
-      setIndicator("error");
-    }
-  } catch {
-    setIndicator("error");
-    showError("Serveur local non joignable. Lancez start.sh et réessayez.");
   }
 }
 
@@ -66,19 +142,16 @@ async function onAsk() {
   if (!question) return;
 
   const selectedText = document.getElementById("selection-preview").textContent;
-  const isPlaceholder =
-    selectedText === "(aucun texte sélectionné)" ||
-    selectedText === "(sélectionnez du texte dans le document)";
+  const isPlaceholder = selectedText.startsWith("(");
+  const sectionNumber = document.getElementById("section-number").value.trim() || null;
 
   hideError();
   setIndicator("busy");
   setLoading(true);
 
-  // Show user message in chat
-  appendMessage("user", question);
+  appendMessage("user", question, sectionNumber);
   questionEl.value = "";
 
-  // Placeholder while waiting
   const loadingEl = appendMessage("loading", "Claude réfléchit…");
 
   try {
@@ -86,33 +159,32 @@ async function onAsk() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        selected_text: isPlaceholder ? "" : selectedText,
         question,
+        selected_text: isPlaceholder ? "" : selectedText,
+        section_number: sectionNumber,
+        session_id: sessionId,
       }),
     });
 
     loadingEl.remove();
 
     if (!resp.ok) {
-      let detail = `Erreur HTTP ${resp.status}`;
-      try {
-        const err = await resp.json();
-        detail = err.detail || detail;
-      } catch {}
-      showError(detail);
+      const err = await resp.json().catch(() => ({}));
+      showError(err.detail || `Erreur HTTP ${resp.status}`);
       setIndicator("error");
       return;
     }
 
     const data = await resp.json();
-    appendMessage("claude", data.answer, data.duration_ms);
+    if (data.session_id) sessionId = data.session_id;
+    appendMessage("claude", data.answer, null, data.duration_ms);
     setIndicator("idle");
 
   } catch (err) {
     loadingEl.remove();
     showError("Impossible de joindre le serveur. Est-ce que start.sh tourne ?");
     setIndicator("error");
-    console.error("fetch error:", err);
+    console.error("fetch /ask error:", err);
   } finally {
     setLoading(false);
   }
@@ -121,11 +193,21 @@ async function onAsk() {
 // ---------------------------------------------------------------------------
 // UI helpers
 // ---------------------------------------------------------------------------
-function appendMessage(role, text, duration_ms) {
+function appendMessage(role, text, sectionNumber = null, duration_ms = undefined) {
   const chat = document.getElementById("chat-history");
   const el = document.createElement("div");
   el.className = `chat-message ${role}`;
-  el.textContent = text;
+
+  if (sectionNumber && role === "user") {
+    const tag = document.createElement("div");
+    tag.className = "chat-section-tag";
+    tag.textContent = `Section ${sectionNumber}`;
+    el.appendChild(tag);
+  }
+
+  const body = document.createElement("span");
+  body.textContent = text;
+  el.appendChild(body);
 
   if (role === "claude" && duration_ms !== undefined) {
     const meta = document.createElement("div");
@@ -146,8 +228,17 @@ function setLoading(isLoading) {
 }
 
 function setIndicator(state) {
-  const el = document.getElementById("status-indicator");
-  el.className = `status-${state}`;
+  document.getElementById("status-indicator").className = `status-${state}`;
+}
+
+function setInitLabel(text, cls) {
+  const el = document.getElementById("init-label");
+  el.textContent = text;
+  el.className = cls || "";
+}
+
+function setDocStatus(text) {
+  document.getElementById("doc-status").textContent = text;
 }
 
 function showError(msg) {

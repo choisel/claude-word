@@ -12,13 +12,35 @@
 
     <header>
       <span class="logo">Claude</span>
-      <span id="status-indicator" class="status-idle" title="Serveur local"></span>
+      <div class="header-right">
+        <span id="doc-status" class="doc-status"></span>
+        <span id="status-indicator" class="status-idle" title="Serveur local"></span>
+      </div>
     </header>
 
+    <section id="init-section">
+      <div id="init-bar">
+        <span id="init-label">Document non chargé</span>
+        <button id="load-doc-btn" class="btn-secondary">Charger le document</button>
+      </div>
+    </section>
+
     <section id="selection-section">
-      <label>Texte sélectionné dans Word</label>
+      <label>Texte sélectionné</label>
       <div id="selection-preview">(sélectionnez du texte dans le document)</div>
-      <button id="refresh-btn" class="btn-secondary">↻ Actualiser la sélection</button>
+      <button id="refresh-btn" class="btn-secondary">↻ Actualiser</button>
+    </section>
+
+    <section id="section-section">
+      <label>Section ciblée <span class="hint">(optionnel)</span></label>
+      <div id="section-input-row">
+        <input
+          type="text"
+          id="section-number"
+          placeholder="ex: 1.2 ou Article 3"
+        />
+        <button id="clear-section-btn" class="btn-icon" title="Effacer">✕</button>
+      </div>
     </section>
 
     <section id="chat-section">
