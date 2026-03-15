@@ -77,7 +77,6 @@ Write-Host ""
 # 3. PyInstaller
 # ---------------------------------------------------------------------------
 Write-Host "--- Building executable with PyInstaller ---"
-Push-Location $Root
 
 & "$BuildVenv\Scripts\pyinstaller.exe" `
     --noconfirm `
@@ -88,10 +87,10 @@ Push-Location $Root
     --distpath $DistDir `
     --workpath "$Root\.build-work" `
     --specpath "$Root\.build-spec" `
-    --add-data "addin;addin" `
-    --add-data "server\main.py;." `
-    --add-data "server\document.py;." `
-    --add-data "server\session.py;." `
+    --add-data "$Root\addin;addin" `
+    --add-data "$Root\server\main.py;." `
+    --add-data "$Root\server\document.py;." `
+    --add-data "$Root\server\session.py;." `
     --hidden-import "uvicorn.logging" `
     --hidden-import "uvicorn.loops" `
     --hidden-import "uvicorn.loops.auto" `
@@ -106,9 +105,8 @@ Push-Location $Root
     --hidden-import "sse_starlette" `
     --hidden-import "pystray._win32" `
     --hidden-import "PIL._imaging" `
-    "server\app_launcher_windows.py"
+    "$Root\server\app_launcher_windows.py"
 
-Pop-Location
 Write-Host "Executable built." -ForegroundColor Green
 Write-Host ""
 
