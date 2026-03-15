@@ -1,0 +1,114 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # macOS build
+  # ---------------------------------------------------------------------------
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build .app
+        run: bash scripts/build-app.sh
+
+      - name: Zip the .app
+        run: |
+          cd dist
+          zip -r "Claude Word Assistant.zip" "Claude Word Assistant.app"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: dist/Claude Word Assistant.zip
+
+  # ---------------------------------------------------------------------------
+  # Windows build
+  # ---------------------------------------------------------------------------
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build .exe
+        shell: pwsh
+        run: scripts\build-app-windows.ps1
+
+      - name: Zip the .exe folder
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path "dist\ClaudeWordAssistant" `
+            -DestinationPath "dist\Claude Word Assistant (Windows).zip"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: dist/Claude Word Assistant (Windows).zip
+
+  # ---------------------------------------------------------------------------
+  # GitHub Release — runs after both builds succeed
+  # ---------------------------------------------------------------------------
+  release:
+    name: Create Release
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download macOS build
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-build
+
+      - name: Download Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-build
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Claude Word Assistant ${{ github.ref_name }}"
+          body: |
+            ## Installation
+
+            ### macOS
+            1. Télécharge `Claude Word Assistant.zip`
+            2. Dézippe → `Claude Word Assistant.app`
+            3. Déplace dans `/Applications`
+            4. Double-clic pour lancer
+
+            ### Windows
+            1. Télécharge `Claude Word Assistant (Windows).zip`
+            2. Dézippe le dossier
+            3. Lance `ClaudeWordAssistant.exe`
+            4. Suis les instructions de première configuration
+            5. Redémarre Word → Insertion → Compléments → Mes compléments → Dossier partagé
+
+            ---
+            **Prérequis :** [Claude CLI](https://claude.ai/download) installé et connecté.
+          files: |
+            Claude Word Assistant.zip
+            Claude Word Assistant (Windows).zip
+          draft: false
+          prerelease: false
