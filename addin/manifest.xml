@@ -40,6 +40,7 @@
             <Description resid="GetStarted.Description"/>
             <LearnMoreUrl resid="GetStarted.LearnMoreUrl"/>
           </GetStarted>
+          <FunctionFile resid="Commands.Url"/>
           <ExtensionPoint xsi:type="ContextMenu">
             <OfficeMenu id="ContextMenuText">
               <Control xsi:type="Button" id="AskClaudeContextMenu">
@@ -53,9 +54,8 @@
                   <bt:Image size="32" resid="Icon.32x32"/>
                   <bt:Image size="80" resid="Icon.80x80"/>
                 </Icon>
-                <Action xsi:type="ShowTaskpane">
-                  <TaskpaneId>ButtonId1</TaskpaneId>
-                  <SourceLocation resid="Taskpane.Url"/>
+                <Action xsi:type="ExecuteFunction">
+                  <FunctionName>askClaudeFromContextMenu</FunctionName>
                 </Action>
               </Control>
             </OfficeMenu>
@@ -100,6 +100,7 @@
       <bt:Urls>
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://localhost:5000"/>
         <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:5000/taskpane.html"/>
+        <bt:Url id="Commands.Url" DefaultValue="https://localhost:5000/commands.html"/>
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GetStarted.Title" DefaultValue="Claude Assistant"/>

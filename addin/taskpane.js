@@ -193,8 +193,8 @@ Office.onReady((info) => {
 
     updateSendButton();
     checkServer().then(() => loadDocument());
-    // If the taskpane was opened via the context menu, capture the selection
-    askClaudeFromSelection();
+    // If opened via context menu, commands.html stored the selection in localStorage
+    checkPendingSelection();
   }
 });
 
@@ -285,22 +285,14 @@ async function readFullDocument() {
 }
 
 // ---------------------------------------------------------------------------
-// Context menu action — called when user clicks "Demander à Claude"
+// Context menu — pick up selection stored by commands.html via localStorage
 // ---------------------------------------------------------------------------
-async function askClaudeFromSelection() {
-  try {
-    await Word.run(async (context) => {
-      const sel = context.document.getSelection();
-      sel.load("text");
-      await context.sync();
-      const text = sel.text.trim();
-      if (text) {
-        pendingSelection = text;
-        showSelectionChip(text);
-      }
-    });
-  } catch (err) {
-    console.error("askClaudeFromSelection error:", err);
+function checkPendingSelection() {
+  const text = localStorage.getItem("claude_pending_selection");
+  if (text) {
+    localStorage.removeItem("claude_pending_selection");
+    pendingSelection = text;
+    showSelectionChip(text);
   }
 }
 
