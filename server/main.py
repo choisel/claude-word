@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 import document as doc_module
@@ -262,6 +263,143 @@ async def ask(req: AskRequest, request: Request):
         answer=answer,
         duration_ms=duration_ms,
         session_id=session.session_id if session else "",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Streaming endpoint
+# ---------------------------------------------------------------------------
+async def stream_claude(prompt: str, session: object, section_sort_key: Optional[float], question: str):
+    """
+    Generator that spawns Claude with stream-json output and yields SSE-formatted lines.
+    Emits: data: {"type":"token","text":"..."}
+           data: {"type":"done","duration_ms":N}
+           data: {"type":"error","detail":"..."}
+    """
+    t0 = time.monotonic()
+    full_answer = []
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            CLAUDE_CLI,
+            "--print",
+            "--output-format", "stream-json",
+            "--permission-mode", "bypassPermissions",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except FileNotFoundError:
+        yield f"data: {json.dumps({'type': 'error', 'detail': f'Claude CLI not found at {CLAUDE_CLI}'})}\n\n"
+        return
+
+    # Write prompt to stdin and close it
+    proc.stdin.write(prompt.encode("utf-8"))
+    await proc.stdin.drain()
+    proc.stdin.close()
+
+    try:
+        async def read_lines():
+            async for raw_line in proc.stdout:
+                line = raw_line.decode("utf-8", errors="replace").strip()
+                if not line:
+                    continue
+                try:
+                    chunk = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                chunk_type = chunk.get("type", "")
+
+                # stream-json emits assistant text in content_block_delta events
+                if chunk_type == "assistant":
+                    for block in chunk.get("message", {}).get("content", []):
+                        if block.get("type") == "text":
+                            text = block["text"]
+                            full_answer.append(text)
+                            yield f"data: {json.dumps({'type': 'token', 'text': text})}\n\n"
+
+                elif chunk_type == "content_block_delta":
+                    delta = chunk.get("delta", {})
+                    if delta.get("type") == "text_delta":
+                        text = delta.get("text", "")
+                        if text:
+                            full_answer.append(text)
+                            yield f"data: {json.dumps({'type': 'token', 'text': text})}\n\n"
+
+                elif chunk_type == "result":
+                    # Final result block — may contain the full text too
+                    result_text = chunk.get("result", "")
+                    if result_text and not full_answer:
+                        full_answer.append(result_text)
+                        yield f"data: {json.dumps({'type': 'token', 'text': result_text})}\n\n"
+
+        async for item in read_lines():
+            yield item
+
+        await asyncio.wait_for(proc.wait(), timeout=TIMEOUT)
+
+    except asyncio.TimeoutError:
+        proc.kill()
+        yield f"data: {json.dumps({'type': 'error', 'detail': f'Claude timed out after {TIMEOUT}s'})}\n\n"
+        return
+
+    duration_ms = int((time.monotonic() - t0) * 1000)
+    final_answer = "".join(full_answer)
+
+    # Save to session history
+    if session and final_answer:
+        session_module.add_exchange(session, "user", question, section_sort_key)
+        session_module.add_exchange(session, "claude", final_answer, section_sort_key)
+
+    logger.info(
+        "[STREAM RESPONSE] duration_ms=%d answer_length=%d | preview=%r",
+        duration_ms, len(final_answer), final_answer[:120],
+    )
+
+    yield f"data: {json.dumps({'type': 'done', 'duration_ms': duration_ms})}\n\n"
+
+
+@app.post("/ask-stream")
+async def ask_stream(req: AskRequest, request: Request):
+    client = request.client.host if request.client else "unknown"
+    logger.info(
+        "[STREAM REQUEST] client=%s question_length=%d section=%s session=%s | question=%r",
+        client, len(req.question),
+        req.section_number or "none",
+        req.session_id or "none",
+        req.question[:120],
+    )
+
+    if not req.question.strip():
+        raise HTTPException(status_code=400, detail="question cannot be empty")
+
+    session = session_module.get_session(req.session_id) if req.session_id else None
+
+    section_sort_key: Optional[float] = None
+    if session and req.section_number:
+        target = doc_module.find_section(session.sections, req.section_number)
+        if target:
+            section_sort_key = target.sort_key
+
+    if session:
+        history = session_module.get_relevant_history(session, section_sort_key)
+        prompt = doc_module.build_ask_prompt(session, req.question, req.section_number, history)
+    else:
+        if req.selected_text.strip():
+            prompt = f"Selected text:\n---\n{req.selected_text}\n---\n\nQuestion: {req.question}"
+        else:
+            prompt = req.question
+
+    logger.debug("Stream prompt (%d chars):\n%s", len(prompt), prompt[:800])
+
+    return StreamingResponse(
+        stream_claude(prompt, session, section_sort_key, req.question),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
