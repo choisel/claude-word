@@ -43,9 +43,9 @@ mkdir -p "$ICONSET_DIR"
 SRC_ICON="$ROOT/addin/assets/icon-80.png"
 
 for size in 16 32 64 128 256 512; do
-    sips -z $size $size "$SRC_ICON" --out "$ICONSET_DIR/icon_${size}x${size}.png" --silent
+    sips -z $size $size "$SRC_ICON" --out "$ICONSET_DIR/icon_${size}x${size}.png" > /dev/null
     double=$((size * 2))
-    sips -z $double $double "$SRC_ICON" --out "$ICONSET_DIR/icon_${size}x${size}@2x.png" --silent
+    sips -z $double $double "$SRC_ICON" --out "$ICONSET_DIR/icon_${size}x${size}@2x.png" > /dev/null
 done
 iconutil -c icns "$ICONSET_DIR" -o "$ICON_DIR/AppIcon.icns"
 echo "✓ Icon generated"
@@ -64,10 +64,10 @@ pyinstaller \
     --distpath "$DIST_DIR" \
     --workpath "$ROOT/.build-work" \
     --specpath "$ROOT/.build-spec" \
-    --add-data "addin:addin" \
-    --add-data "server/main.py:." \
-    --add-data "server/document.py:." \
-    --add-data "server/session.py:." \
+    --add-data "$ROOT/addin:addin" \
+    --add-data "$ROOT/server/main.py:." \
+    --add-data "$ROOT/server/document.py:." \
+    --add-data "$ROOT/server/session.py:." \
     --hidden-import "uvicorn.logging" \
     --hidden-import "uvicorn.loops" \
     --hidden-import "uvicorn.loops.auto" \
@@ -80,7 +80,7 @@ pyinstaller \
     --hidden-import "uvicorn.lifespan.on" \
     --hidden-import "fastapi" \
     --hidden-import "sse_starlette" \
-    server/app_launcher.py \
+    "$ROOT/server/app_launcher.py" \
     2>&1 | tail -20
 
 echo "✓ Binary built"
