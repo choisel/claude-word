@@ -284,6 +284,7 @@ async def stream_claude(prompt: str, session: object, section_sort_key: Optional
             CLAUDE_CLI,
             "--print",
             "--output-format", "stream-json",
+            "--verbose",
             "--permission-mode", "bypassPermissions",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
