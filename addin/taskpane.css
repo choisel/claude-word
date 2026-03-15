@@ -1,16 +1,52 @@
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* ---------------------------------------------------------------------------
+   CSS custom properties — set by JS from Office.context.officeTheme.
+   Fallbacks cover Word Online and systems without officeTheme support.
+--------------------------------------------------------------------------- */
+:root {
+  /* Office theme colors (overridden at runtime by applyOfficeTheme()) */
+  --office-body-bg:    #f3f3f3;
+  --office-body-fg:    #1a1a1a;
+  --office-ctrl-bg:    #ffffff;
+  --office-ctrl-fg:    #1a1a1a;
+
+  /* Derived UI tokens */
+  --bg:          var(--office-body-bg);
+  --fg:          var(--office-body-fg);
+  --surface:     var(--office-ctrl-bg);
+  --surface-fg:  var(--office-ctrl-fg);
+  --border:      color-mix(in srgb, var(--office-body-fg) 15%, transparent);
+  --muted:       color-mix(in srgb, var(--office-body-fg) 45%, transparent);
+  --subtle:      color-mix(in srgb, var(--office-body-fg) 25%, transparent);
+
+  /* Accent — Claude brand colour, stays consistent across themes */
+  --accent:      #cc785c;
+  --accent-dark: #b5664b;
+  --accent-pale: color-mix(in srgb, var(--accent) 12%, var(--surface));
 }
+
+/* Dark-mode fallback when Office theme API is unavailable */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-office-theme]) {
+    --office-body-bg:  #1f1f1f;
+    --office-body-fg:  #e8e8e8;
+    --office-ctrl-bg:  #2d2d2d;
+    --office-ctrl-fg:  #e8e8e8;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Reset & base
+--------------------------------------------------------------------------- */
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 13px;
-  background: #f9f9f9;
-  color: #1a1a1a;
+  background: var(--bg);
+  color: var(--fg);
   height: 100vh;
   overflow: hidden;
+  transition: background 0.2s, color 0.2s;
 }
 
 #app {
@@ -19,14 +55,16 @@ body {
   height: 100vh;
 }
 
-/* Header */
+/* ---------------------------------------------------------------------------
+   Header
+--------------------------------------------------------------------------- */
 header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  background: #cc785c;
-  color: white;
+  background: var(--accent);
+  color: #fff;
   font-weight: 600;
   font-size: 15px;
   flex-shrink: 0;
@@ -40,21 +78,29 @@ header {
   gap: 8px;
 }
 
-.status-idle  { width: 8px; height: 8px; border-radius: 50%; background: #a8e6a8; }
+.doc-status {
+  font-size: 10px;
+  color: rgba(255,255,255,0.75);
+}
+
+/* Status indicator dot */
+.status-idle  { width: 8px; height: 8px; border-radius: 50%; background: #6fcf6f; }
 .status-busy  { width: 8px; height: 8px; border-radius: 50%; background: #ffd966; animation: pulse 1s infinite; }
 .status-error { width: 8px; height: 8px; border-radius: 50%; background: #ff6b6b; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
-  50%       { opacity: 0.4; }
+  50%       { opacity: 0.35; }
 }
 
-/* Init bar */
+/* ---------------------------------------------------------------------------
+   Sections (init bar, selection, section targeting)
+--------------------------------------------------------------------------- */
 #init-section {
   padding: 8px 14px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  background: #fff;
+  background: var(--surface);
 }
 
 #init-bar {
@@ -66,22 +112,17 @@ header {
 
 #init-label {
   font-size: 11px;
-  color: #888;
+  color: var(--muted);
   flex: 1;
 }
 
-#init-label.ready { color: #4a9e4a; }
-#init-label.loading { color: #cc785c; font-style: italic; }
+#init-label.ready   { color: #4a9e4a; }
+#init-label.loading { color: var(--accent); font-style: italic; }
 
-.doc-status {
-  font-size: 10px;
-  color: rgba(255,255,255,0.8);
-}
-
-/* Selection */
-#selection-section {
+#selection-section,
+#section-section {
   padding: 8px 14px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
@@ -91,7 +132,7 @@ header {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #888;
+  color: var(--muted);
   margin-bottom: 4px;
 }
 
@@ -99,30 +140,26 @@ header {
   font-size: 10px;
   text-transform: none;
   letter-spacing: 0;
-  color: #bbb;
+  color: var(--subtle);
 }
 
 #selection-preview {
-  background: #fff;
-  border: 1px solid #ddd;
+  background: var(--bg);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 12px;
   line-height: 1.5;
-  color: #444;
+  color: var(--surface-fg);
   max-height: 70px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-/* Section targeting */
-#section-section {
-  padding: 8px 14px;
-  border-bottom: 1px solid #e0e0e0;
-  flex-shrink: 0;
-}
-
+/* ---------------------------------------------------------------------------
+   Section input
+--------------------------------------------------------------------------- */
 #section-input-row {
   display: flex;
   gap: 6px;
@@ -131,7 +168,9 @@ header {
 
 #section-number {
   flex: 1;
-  border: 1px solid #ccc;
+  background: var(--surface);
+  color: var(--surface-fg);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 5px 8px;
   font-size: 12px;
@@ -140,32 +179,40 @@ header {
   transition: border-color 0.15s;
 }
 
-#section-number:focus { border-color: #cc785c; }
+#section-number:focus { border-color: var(--accent); }
 
-.btn-icon {
-  background: none;
+/* ---------------------------------------------------------------------------
+   Buttons
+--------------------------------------------------------------------------- */
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
   border: none;
-  color: #bbb;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  font-size: 12px;
-  padding: 4px;
-  line-height: 1;
+  white-space: nowrap;
+  transition: background 0.15s;
 }
 
-.btn-icon:hover { color: #888; }
+.btn-primary:hover:not(:disabled) { background: var(--accent-dark); }
+.btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
 
 .btn-secondary {
   font-size: 11px;
-  color: #cc785c;
+  color: var(--accent);
   background: none;
-  border: 1px solid #cc785c;
+  border: 1px solid var(--accent);
   border-radius: 5px;
   cursor: pointer;
   padding: 3px 8px;
   white-space: nowrap;
+  transition: background 0.15s;
 }
 
-.btn-secondary:hover { background: #fdf0ec; }
+.btn-secondary:hover { background: var(--accent-pale); }
 
 #refresh-btn {
   margin-top: 5px;
@@ -174,7 +221,21 @@ header {
   font-size: 11px;
 }
 
-/* Chat */
+.btn-icon {
+  background: none;
+  border: none;
+  color: var(--subtle);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px;
+  line-height: 1;
+}
+
+.btn-icon:hover { color: var(--muted); }
+
+/* ---------------------------------------------------------------------------
+   Chat
+--------------------------------------------------------------------------- */
 #chat-section {
   flex: 1;
   overflow-y: auto;
@@ -194,57 +255,64 @@ header {
 }
 
 .chat-message.user {
-  background: #cc785c;
-  color: white;
+  background: var(--accent);
+  color: #fff;
   align-self: flex-end;
   border-bottom-right-radius: 3px;
 }
 
 .chat-message.claude {
-  background: #fff;
-  border: 1px solid #e0e0e0;
+  background: var(--surface);
+  color: var(--surface-fg);
+  border: 1px solid var(--border);
   align-self: flex-start;
   border-bottom-left-radius: 3px;
 }
 
 .chat-message.loading {
-  background: #f0f0f0;
-  color: #999;
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--border);
   font-style: italic;
   align-self: flex-start;
 }
 
 .chat-meta {
   font-size: 10px;
-  color: #bbb;
+  color: var(--subtle);
   margin-top: 3px;
   text-align: right;
 }
 
+.chat-section-tag {
+  font-size: 10px;
+  color: rgba(255,255,255,0.75);
+  margin-bottom: 3px;
+}
+
 .stream-cursor {
   display: inline-block;
-  color: #cc785c;
+  color: var(--accent);
   animation: blink 0.8s step-end infinite;
   margin-left: 1px;
 }
+
+/* For streaming bubble the cursor should contrast on surface bg */
+.chat-message.claude .stream-cursor { color: var(--accent); }
 
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0; }
 }
 
-.chat-section-tag {
-  font-size: 10px;
-  color: #cc785c;
-  margin-bottom: 3px;
-}
-
-/* Footer */
+/* ---------------------------------------------------------------------------
+   Footer / input
+--------------------------------------------------------------------------- */
 footer {
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border);
   padding: 10px 14px;
   flex-shrink: 0;
-  background: #f9f9f9;
+  background: var(--surface);
 }
 
 #input-area {
@@ -255,7 +323,9 @@ footer {
 
 #question {
   flex: 1;
-  border: 1px solid #ccc;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px;
   font-size: 13px;
@@ -266,29 +336,17 @@ footer {
   transition: border-color 0.15s;
 }
 
-#question:focus { border-color: #cc785c; }
+#question:focus { border-color: var(--accent); }
+#question::placeholder { color: var(--subtle); }
 
-.btn-primary {
-  background: #cc785c;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s;
-}
-
-.btn-primary:hover:not(:disabled) { background: #b5664b; }
-.btn-primary:disabled { background: #ddd; color: #aaa; cursor: not-allowed; }
-
+/* ---------------------------------------------------------------------------
+   Error bar
+--------------------------------------------------------------------------- */
 #error-bar {
   margin-top: 8px;
   padding: 7px 10px;
-  background: #fff0f0;
-  border: 1px solid #ffcccc;
+  background: color-mix(in srgb, #cc3333 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, #cc3333 35%, transparent);
   border-radius: 6px;
   color: #cc3333;
   font-size: 12px;

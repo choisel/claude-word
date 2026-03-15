@@ -9,10 +9,40 @@ let knownSections = [];  // [{number, title, sort_key}] from /init
 let sectionDetectionInterval = null;
 
 // ---------------------------------------------------------------------------
+// Office theme
+// ---------------------------------------------------------------------------
+function applyOfficeTheme(theme) {
+  if (!theme) return;
+  const root = document.documentElement;
+  root.setAttribute("data-office-theme", "1");
+  root.style.setProperty("--office-body-bg",  theme.bodyBackgroundColor  || "");
+  root.style.setProperty("--office-body-fg",  theme.bodyForegroundColor  || "");
+  root.style.setProperty("--office-ctrl-bg",  theme.controlBackgroundColor || "");
+  root.style.setProperty("--office-ctrl-fg",  theme.controlForegroundColor || "");
+}
+
+function initTheme() {
+  try {
+    const theme = Office.context.officeTheme;
+    if (theme) {
+      applyOfficeTheme(theme);
+      // Listen for theme changes (user switches dark/light in Office settings)
+      Office.context.officeTheme.addHandlerAsync(
+        Office.EventType.OfficeThemeChanged,
+        (e) => applyOfficeTheme(e.officeTheme)
+      );
+    }
+  } catch {
+    // officeTheme not available (Word Online / Mac) — CSS media query fallback applies
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
 Office.onReady((info) => {
   if (info.host === Office.HostType.Word) {
+    initTheme();
     document.getElementById("ask-btn").addEventListener("click", onAsk);
     document.getElementById("refresh-btn").addEventListener("click", refreshSelection);
     document.getElementById("load-doc-btn").addEventListener("click", loadDocument);
