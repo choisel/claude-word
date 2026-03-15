@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claude Assistant</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js" type="text/javascript"></script>
+  <link rel="stylesheet" href="taskpane.css" />
+</head>
+<body>
+  <div id="app">
+
+    <header>
+      <span class="logo">Claude</span>
+      <span id="status-indicator" class="status-idle" title="Serveur local"></span>
+    </header>
+
+    <section id="selection-section">
+      <label>Texte sélectionné dans Word</label>
+      <div id="selection-preview">(sélectionnez du texte dans le document)</div>
+      <button id="refresh-btn" class="btn-secondary">↻ Actualiser la sélection</button>
+    </section>
+
+    <section id="chat-section">
+      <div id="chat-history"></div>
+    </section>
+
+    <footer>
+      <div id="input-area">
+        <textarea
+          id="question"
+          placeholder="Posez votre question à Claude…"
+          rows="3"
+        ></textarea>
+        <button id="ask-btn" class="btn-primary">Envoyer</button>
+      </div>
+      <div id="error-bar" class="hidden"></div>
+    </footer>
+
+  </div>
+
+  <script src="taskpane.js"></script>
+</body>
+</html>

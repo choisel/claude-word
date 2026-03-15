@@ -1,0 +1,8 @@
+certs/*.key
+certs/*.crt
+server/.env
+server/logs/*.log
+server/__pycache__/
+server/venv/
+*.pyc
+.DS_Store
