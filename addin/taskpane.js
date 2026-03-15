@@ -193,8 +193,15 @@ Office.onReady((info) => {
 
     updateSendButton();
     checkServer().then(() => loadDocument());
-    // If opened via context menu, commands.html stored the selection in localStorage
+    // Pick up selection if taskpane was already open when context menu was clicked
     checkPendingSelection();
+    window.addEventListener("storage", (e) => {
+      if (e.key === "claude_pending_selection" && e.newValue) {
+        localStorage.removeItem("claude_pending_selection");
+        pendingSelection = e.newValue;
+        showSelectionChip(e.newValue);
+      }
+    });
   }
 });
 
