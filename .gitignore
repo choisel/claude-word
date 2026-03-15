@@ -6,3 +6,9 @@ server/__pycache__/
 server/venv/
 *.pyc
 .DS_Store
+dist/
+.build-venv/
+.build-work/
+.build-spec/
+.build-icon/
+_app_support/
