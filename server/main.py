@@ -3,6 +3,7 @@ import json
 import logging
 import logging.handlers
 import os
+import tempfile
 import time
 from pathlib import Path
 from typing import Optional
@@ -108,6 +109,7 @@ async def call_claude(prompt: str) -> tuple[str, int]:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            cwd=tempfile.gettempdir(),
         )
     except FileNotFoundError:
         logger.error("Claude CLI not found at: %s", CLAUDE_CLI)
@@ -289,6 +291,7 @@ async def stream_claude(prompt: str, session: object, section_sort_key: Optional
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            cwd=tempfile.gettempdir(),
         )
     except FileNotFoundError:
         yield f"data: {json.dumps({'type': 'error', 'detail': f'Claude CLI not found at {CLAUDE_CLI}'})}\n\n"
