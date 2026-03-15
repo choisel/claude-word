@@ -5,12 +5,16 @@ import logging.handlers
 import os
 import time
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+import document as doc_module
+import session as session_module
 
 # ---------------------------------------------------------------------------
 # Config
@@ -48,7 +52,7 @@ logger = logging.getLogger("claude-bridge")
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
-app = FastAPI(title="Claude Word Bridge", version="1.0.0")
+app = FastAPI(title="Claude Word Bridge", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,27 +65,35 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
+class InitRequest(BaseModel):
+    text: str
+    session_id: Optional[str] = None
+
+
+class InitResponse(BaseModel):
+    session_id: str
+    page_count: int
+    section_count: int
+    mode: str          # "full" | "summarized"
+    structure: list[dict]
+
+
 class AskRequest(BaseModel):
-    selected_text: str = ""
     question: str
+    selected_text: str = ""
+    section_number: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 class AskResponse(BaseModel):
     answer: str
     duration_ms: int
+    session_id: str
 
 
 # ---------------------------------------------------------------------------
 # Claude call
 # ---------------------------------------------------------------------------
-def build_prompt(selected_text: str, question: str) -> str:
-    if selected_text and selected_text.strip():
-        return (
-            f"Selected text:\n---\n{selected_text}\n---\n\n{question}"
-        )
-    return question
-
-
 async def call_claude(prompt: str) -> tuple[str, int]:
     logger.debug("Spawning claude CLI: %s", CLAUDE_CLI)
     t0 = time.monotonic()
@@ -116,7 +128,9 @@ async def call_claude(prompt: str) -> tuple[str, int]:
     duration_ms = int((time.monotonic() - t0) * 1000)
 
     if stderr:
-        logger.warning("Claude CLI stderr: %s", stderr.decode("utf-8", errors="replace").strip())
+        stderr_text = stderr.decode("utf-8", errors="replace").strip()
+        if stderr_text:
+            logger.warning("Claude CLI stderr: %s", stderr_text)
 
     if proc.returncode != 0:
         raw_err = stderr.decode("utf-8", errors="replace").strip()
@@ -128,10 +142,8 @@ async def call_claude(prompt: str) -> tuple[str, int]:
 
     raw = stdout.decode("utf-8", errors="replace").strip()
 
-    # Try to parse JSON output; fall back to raw text
     try:
         data = json.loads(raw)
-        # The JSON format has a "result" field
         answer = data.get("result") or data.get("response") or raw
     except json.JSONDecodeError:
         logger.debug("Claude output is not JSON, using raw text")
@@ -148,24 +160,96 @@ async def health():
     return {"status": "ok", "claude_cli": CLAUDE_CLI}
 
 
+@app.post("/init", response_model=InitResponse)
+async def init_document(req: InitRequest, request: Request):
+    client = request.client.host if request.client else "unknown"
+    page_count = doc_module.estimate_pages(req.text)
+    sections = doc_module.extract_sections(req.text)
+
+    logger.info(
+        "[INIT] client=%s pages=%d sections=%d text_length=%d",
+        client, page_count, len(sections), len(req.text)
+    )
+
+    session = session_module.get_or_create_session(req.session_id)
+    session.page_count = page_count
+    session.section_count = len(sections)
+    session.sections = sections
+    session.history = []  # reset history on document reload
+
+    if page_count < doc_module.SHORT_DOC_PAGE_THRESHOLD:
+        session.mode = "full"
+        session.full_text = req.text
+        session.summary = ""
+        session.structure_text = doc_module.build_structure_text(sections)
+        logger.info("[INIT] mode=full, no summarization needed")
+    else:
+        session.mode = "summarized"
+        session.full_text = ""
+        session.structure_text = doc_module.build_structure_text(sections)
+        logger.info("[INIT] mode=summarized, calling Claude for summary...")
+        init_prompt = doc_module.build_init_prompt(req.text)
+        summary, duration_ms = await call_claude(init_prompt)
+        session.summary = summary
+        logger.info("[INIT] summary generated in %dms (%d chars)", duration_ms, len(summary))
+
+    structure_list = [
+        {"number": s.number, "title": s.title, "sort_key": s.sort_key}
+        for s in sections
+    ]
+
+    return InitResponse(
+        session_id=session.session_id,
+        page_count=page_count,
+        section_count=len(sections),
+        mode=session.mode,
+        structure=structure_list,
+    )
+
+
 @app.post("/ask", response_model=AskResponse)
 async def ask(req: AskRequest, request: Request):
     client = request.client.host if request.client else "unknown"
     logger.info(
-        "[REQUEST] client=%s question_length=%d selected_text_length=%d | question=%r",
+        "[REQUEST] client=%s question_length=%d section=%s session=%s | question=%r",
         client,
         len(req.question),
-        len(req.selected_text),
+        req.section_number or "none",
+        req.session_id or "none",
         req.question[:120],
     )
 
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="question cannot be empty")
 
-    prompt = build_prompt(req.selected_text, req.question)
-    logger.debug("Prompt sent to Claude (%d chars):\n%s", len(prompt), prompt[:500])
+    session = session_module.get_session(req.session_id) if req.session_id else None
+
+    # Determine section sort key for history filtering
+    section_sort_key: Optional[float] = None
+    if session and req.section_number:
+        target = doc_module.find_section(session.sections, req.section_number)
+        if target:
+            section_sort_key = target.sort_key
+
+    # Build prompt
+    if session:
+        history = session_module.get_relevant_history(session, section_sort_key)
+        prompt = doc_module.build_ask_prompt(session, req.question, req.section_number, history)
+    else:
+        # No session — fall back to simple prompt with selected text
+        if req.selected_text.strip():
+            prompt = f"Selected text:\n---\n{req.selected_text}\n---\n\nQuestion: {req.question}"
+        else:
+            prompt = req.question
+
+    logger.debug("Prompt sent to Claude (%d chars):\n%s", len(prompt), prompt[:800])
 
     answer, duration_ms = await call_claude(prompt)
+
+    # Save to history
+    if session:
+        session_module.add_exchange(session, "user", req.question, section_sort_key)
+        session_module.add_exchange(session, "claude", answer, section_sort_key)
 
     logger.info(
         "[RESPONSE] duration_ms=%d answer_length=%d | answer_preview=%r",
@@ -174,7 +258,11 @@ async def ask(req: AskRequest, request: Request):
         answer[:120],
     )
 
-    return AskResponse(answer=answer, duration_ms=duration_ms)
+    return AskResponse(
+        answer=answer,
+        duration_ms=duration_ms,
+        session_id=session.session_id if session else "",
+    )
 
 
 # ---------------------------------------------------------------------------
