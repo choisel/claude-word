@@ -8,6 +8,7 @@ let sectionCount = 0;
 let knownSections = [];
 let sectionDetectionInterval = null;
 let documentLoaded = false;
+let pendingSelection = "";
 
 // ---------------------------------------------------------------------------
 // i18n — labels keyed by Office locale (2-letter prefix, fallback to "en")
@@ -31,12 +32,11 @@ const STRINGS = {
     serverUnreach:   "Impossible de joindre le serveur. Est-ce que start.sh tourne ?",
     httpError:       (status) => `Erreur HTTP ${status}`,
     sectionLabel:    "Section",
-    selectionLabel:  "Texte sélectionné",
     sectionTarget:   "Section ciblée",
     optional:        "(optionnel)",
-    refresh:         "↻ Actualiser",
     placeholder:     "Posez votre question à Claude…",
     sectionAll:      "— document entier —",
+    selectionChip:   "Texte sélectionné :",
   },
   en: {
     noText:          "(no text selected)",
@@ -56,12 +56,11 @@ const STRINGS = {
     serverUnreach:   "Cannot reach server. Is start.sh running?",
     httpError:       (status) => `HTTP error ${status}`,
     sectionLabel:    "Section",
-    selectionLabel:  "Selected text",
     sectionTarget:   "Target section",
     optional:        "(optional)",
-    refresh:         "↻ Refresh",
     placeholder:     "Ask Claude a question…",
     sectionAll:      "— full document —",
+    selectionChip:   "Selected text:",
   },
   de: {
     noText:          "(kein Text ausgewählt)",
@@ -81,12 +80,11 @@ const STRINGS = {
     serverUnreach:   "Server nicht erreichbar. Läuft start.sh?",
     httpError:       (status) => `HTTP-Fehler ${status}`,
     sectionLabel:    "Abschnitt",
-    selectionLabel:  "Ausgewählter Text",
     sectionTarget:   "Zielabschnitt",
     optional:        "(optional)",
-    refresh:         "↻ Aktualisieren",
     placeholder:     "Stellen Sie Claude eine Frage…",
     sectionAll:      "— gesamtes Dokument —",
+    selectionChip:   "Ausgewählter Text:",
   },
   es: {
     noText:          "(ningún texto seleccionado)",
@@ -106,12 +104,11 @@ const STRINGS = {
     serverUnreach:   "No se puede conectar al servidor. ¿Está ejecutándose start.sh?",
     httpError:       (status) => `Error HTTP ${status}`,
     sectionLabel:    "Sección",
-    selectionLabel:  "Texto seleccionado",
     sectionTarget:   "Sección objetivo",
     optional:        "(opcional)",
-    refresh:         "↻ Actualizar",
     placeholder:     "Haga una pregunta a Claude…",
     sectionAll:      "— documento completo —",
+    selectionChip:   "Texto seleccionado:",
   },
 };
 
@@ -120,13 +117,10 @@ let t = STRINGS.en; // active locale strings, set in initLocale()
 function initLocale() {
   const locale = (Office.context.displayLanguage || "en-US").substring(0, 2).toLowerCase();
   t = STRINGS[locale] || STRINGS.en;
-  // Apply static labels to DOM
-  document.getElementById("load-doc-btn").textContent   = t.loadBtn;
-  document.getElementById("init-label").textContent     = t.docNotLoaded;
-  document.getElementById("refresh-btn").textContent    = t.refresh;
-  document.getElementById("question").placeholder       = t.placeholder;
-  document.getElementById("ask-btn").textContent        = t.send;
-  // Labels and hints
+  document.getElementById("load-doc-btn").textContent = t.loadBtn;
+  document.getElementById("init-label").textContent   = t.docNotLoaded;
+  document.getElementById("question").placeholder     = t.placeholder;
+  document.getElementById("ask-btn").textContent      = t.send;
   const labels = document.querySelectorAll("[data-i18n]");
   labels.forEach((el) => {
     const key = el.dataset.i18n;
@@ -175,8 +169,8 @@ Office.onReady((info) => {
     initLocale();
 
     document.getElementById("ask-btn").addEventListener("click", onAsk);
-    document.getElementById("refresh-btn").addEventListener("click", refreshSelection);
     document.getElementById("load-doc-btn").addEventListener("click", loadDocument);
+    document.getElementById("selection-chip-clear").addEventListener("click", clearSelectionChip);
     document.getElementById("clear-section-btn").addEventListener("click", () => {
       const sel = document.getElementById("section-number");
       sel.value = "";
@@ -198,8 +192,9 @@ Office.onReady((info) => {
     document.getElementById("question").addEventListener("input", updateSendButton);
 
     updateSendButton();
-    refreshSelection();
     checkServer().then(() => loadDocument());
+    // If the taskpane was opened via the context menu, capture the selection
+    askClaudeFromSelection();
   }
 });
 
@@ -290,20 +285,35 @@ async function readFullDocument() {
 }
 
 // ---------------------------------------------------------------------------
-// Selection
+// Context menu action — called when user clicks "Demander à Claude"
 // ---------------------------------------------------------------------------
-async function refreshSelection() {
+async function askClaudeFromSelection() {
   try {
     await Word.run(async (context) => {
       const sel = context.document.getSelection();
       sel.load("text");
       await context.sync();
-      document.getElementById("selection-preview").textContent =
-        sel.text.trim() || t.noText;
+      const text = sel.text.trim();
+      if (text) {
+        pendingSelection = text;
+        showSelectionChip(text);
+      }
     });
   } catch (err) {
-    console.error("refreshSelection error:", err);
+    console.error("askClaudeFromSelection error:", err);
   }
+}
+
+function showSelectionChip(text) {
+  const chip = document.getElementById("selection-chip");
+  document.getElementById("selection-chip-text").textContent = text;
+  chip.classList.remove("hidden");
+}
+
+function clearSelectionChip() {
+  pendingSelection = "";
+  document.getElementById("selection-chip").classList.add("hidden");
+  document.getElementById("selection-chip-text").textContent = "";
 }
 
 // ---------------------------------------------------------------------------
@@ -314,8 +324,7 @@ async function onAsk() {
   const question = questionEl.value.trim();
   if (!question) return;
 
-  const selectedText = document.getElementById("selection-preview").textContent;
-  const isPlaceholder = selectedText.startsWith("(");
+  const selectedText = pendingSelection;
   const sectionNumber = document.getElementById("section-number").value.trim() || null;
 
   hideError();
@@ -333,7 +342,7 @@ async function onAsk() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         question,
-        selected_text: isPlaceholder ? "" : selectedText,
+        selected_text: selectedText,
         section_number: sectionNumber,
         session_id: sessionId,
       }),
@@ -382,6 +391,7 @@ async function onAsk() {
     console.error("fetch /ask-stream error:", err);
   } finally {
     setLoading(false);
+    clearSelectionChip();
   }
 }
 
@@ -503,6 +513,11 @@ function updateSendButton() {
   btn.disabled = !documentLoaded || !question;
 }
 
+function formatSectionNumber(number) {
+  // "1.1.2" → "1 - 1 - 2"
+  return number.split(".").join(" - ");
+}
+
 function populateSectionDropdown(sections) {
   const sel = document.getElementById("section-number");
   sel.innerHTML = "";
@@ -513,7 +528,8 @@ function populateSectionDropdown(sections) {
   for (const s of sections) {
     const opt = document.createElement("option");
     opt.value = s.number;
-    opt.textContent = s.title ? `${s.number} — ${s.title}` : s.number;
+    const label = formatSectionNumber(s.number);
+    opt.textContent = s.title ? `${label} — ${s.title}` : label;
     sel.appendChild(opt);
   }
 }

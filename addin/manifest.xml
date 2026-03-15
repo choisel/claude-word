@@ -40,6 +40,26 @@
             <Description resid="GetStarted.Description"/>
             <LearnMoreUrl resid="GetStarted.LearnMoreUrl"/>
           </GetStarted>
+          <ExtensionPoint xsi:type="ContextMenu">
+            <OfficeMenu id="ContextMenuText">
+              <Control xsi:type="Button" id="AskClaudeContextMenu">
+                <Label resid="ContextMenu.Label"/>
+                <Supertip>
+                  <Title resid="ContextMenu.Label"/>
+                  <Description resid="ContextMenu.Tooltip"/>
+                </Supertip>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16x16"/>
+                  <bt:Image size="32" resid="Icon.32x32"/>
+                  <bt:Image size="80" resid="Icon.80x80"/>
+                </Icon>
+                <Action xsi:type="ShowTaskpane">
+                  <TaskpaneId>ButtonId1</TaskpaneId>
+                  <SourceLocation resid="Taskpane.Url"/>
+                </Action>
+              </Control>
+            </OfficeMenu>
+          </ExtensionPoint>
           <ExtensionPoint xsi:type="PrimaryCommandSurface">
             <OfficeTab id="TabHome">
               <Group id="CommandsGroup">
@@ -85,10 +105,12 @@
         <bt:String id="GetStarted.Title" DefaultValue="Claude Assistant"/>
         <bt:String id="CommandsGroup.Label" DefaultValue="Claude"/>
         <bt:String id="OpenTaskpane.Label" DefaultValue="Ouvrir Claude"/>
+        <bt:String id="ContextMenu.Label" DefaultValue="Demander à Claude"/>
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="GetStarted.Description" DefaultValue="Interagissez avec Claude depuis Word."/>
         <bt:String id="OpenTaskpane.Tooltip" DefaultValue="Ouvre le panneau Claude pour interagir avec le document."/>
+        <bt:String id="ContextMenu.Tooltip" DefaultValue="Envoie le texte sélectionné à Claude dans le panneau."/>
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>

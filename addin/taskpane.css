@@ -150,19 +150,6 @@ header {
   color: var(--subtle);
 }
 
-#selection-preview {
-  background: var(--theme-surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--theme-sfg);
-  max-height: 70px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
 
 #section-input-row {
   display: flex;
@@ -172,6 +159,8 @@ header {
 
 #section-number {
   flex: 1;
+  min-width: 0;
+  max-width: 100%;
   background: var(--theme-surface);
   color: var(--theme-sfg);
   border: 1px solid var(--border);
@@ -181,6 +170,8 @@ header {
   font-family: inherit;
   outline: none;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: border-color 0.15s;
 }
 
@@ -219,12 +210,6 @@ header {
 
 .btn-secondary:hover { background: var(--accent-pale); }
 
-#refresh-btn {
-  margin-top: 5px;
-  border: none;
-  padding: 0;
-  font-size: 11px;
-}
 
 .btn-icon {
   background: none;
@@ -306,6 +291,32 @@ header {
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0; }
+}
+
+/* ---------------------------------------------------------------------------
+   Selection chip (shown above input when text is selected via context menu)
+--------------------------------------------------------------------------- */
+#selection-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent-pale);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 6px;
+  padding: 5px 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--theme-sfg);
+}
+
+#selection-chip-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-style: italic;
+  color: var(--muted);
 }
 
 /* ---------------------------------------------------------------------------

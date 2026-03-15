@@ -25,12 +25,6 @@
       </div>
     </section>
 
-    <section id="selection-section">
-      <label data-i18n="selectionLabel">Texte sélectionné</label>
-      <div id="selection-preview">(sélectionnez du texte dans le document)</div>
-      <button id="refresh-btn" class="btn-secondary">↻ Actualiser</button>
-    </section>
-
     <section id="section-section">
       <label data-i18n="sectionTarget">Section ciblée <span class="hint" data-i18n="optional">(optionnel)</span></label>
       <div id="section-input-row">
@@ -44,6 +38,10 @@
     </section>
 
     <footer>
+      <div id="selection-chip" class="hidden">
+        <span id="selection-chip-text"></span>
+        <button id="selection-chip-clear" class="btn-icon" title="Effacer">✕</button>
+      </div>
       <div id="input-area">
         <textarea
           id="question"
