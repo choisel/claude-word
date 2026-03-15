@@ -91,7 +91,7 @@ async def call_claude(prompt: str) -> tuple[str, int]:
             CLAUDE_CLI,
             "--print",
             "--output-format", "json",
-            "--no-permission-prompt",
+            "--permission-mode", "bypassPermissions",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
