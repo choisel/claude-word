@@ -138,7 +138,10 @@ def build_ask_prompt(
     section_number: Optional[str],
     history_exchanges: list,
 ) -> str:
-    parts: list[str] = []
+    parts: list[str] = [
+        "You are a document assistant. The user is working on a document in Microsoft Word. "
+        "The document content is provided below. Answer questions about this document only.\n"
+    ]
 
     if session.mode == "full":
         parts.append(f"Document:\n---\n{session.full_text}\n---\n")
