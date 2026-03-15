@@ -3,46 +3,172 @@
 const SERVER = "https://localhost:5000";
 
 let sessionId = null;
-let docMode = null;      // "full" | "summarized" | null
+let docMode = null;
 let sectionCount = 0;
-let knownSections = [];  // [{number, title, sort_key}] from /init
+let knownSections = [];
 let sectionDetectionInterval = null;
 
 // ---------------------------------------------------------------------------
-// Office theme
+// i18n — labels keyed by Office locale (2-letter prefix, fallback to "en")
 // ---------------------------------------------------------------------------
-function applyOfficeTheme(theme) {
-  if (!theme) return;
-  const root = document.documentElement;
-  root.setAttribute("data-office-theme", "1");
-  root.style.setProperty("--office-body-bg",  theme.bodyBackgroundColor  || "");
-  root.style.setProperty("--office-body-fg",  theme.bodyForegroundColor  || "");
-  root.style.setProperty("--office-ctrl-bg",  theme.controlBackgroundColor || "");
-  root.style.setProperty("--office-ctrl-fg",  theme.controlForegroundColor || "");
+const STRINGS = {
+  fr: {
+    noText:          "(aucun texte sélectionné)",
+    docNotLoaded:    "Document non chargé",
+    loadBtn:         "Charger le document",
+    reading:         "Lecture du document…",
+    readError:       "Erreur de lecture du document",
+    serverError:     "Serveur local non joignable. Lancez start.sh et réessayez.",
+    emptyDoc:        "Document vide",
+    loadedDoc:       (sections, pages, mode) =>
+      `Document chargé — ${sections} sections · ${pages} pages · mode ${mode === "summarized" ? "résumé" : "complet"}`,
+    loadFailed:      "Échec du chargement",
+    initError:       (msg) => `Erreur initialisation : ${msg}`,
+    thinking:        "Claude réfléchit…",
+    send:            "Envoyer",
+    sending:         "…",
+    serverUnreach:   "Impossible de joindre le serveur. Est-ce que start.sh tourne ?",
+    httpError:       (status) => `Erreur HTTP ${status}`,
+    sectionLabel:    "Section",
+    selectionLabel:  "Texte sélectionné",
+    sectionTarget:   "Section ciblée",
+    optional:        "(optionnel)",
+    refresh:         "↻ Actualiser",
+    placeholder:     "Posez votre question à Claude…",
+  },
+  en: {
+    noText:          "(no text selected)",
+    docNotLoaded:    "Document not loaded",
+    loadBtn:         "Load document",
+    reading:         "Reading document…",
+    readError:       "Error reading document",
+    serverError:     "Local server unreachable. Run start.sh and try again.",
+    emptyDoc:        "Empty document",
+    loadedDoc:       (sections, pages, mode) =>
+      `Document loaded — ${sections} sections · ${pages} pages · ${mode} mode`,
+    loadFailed:      "Load failed",
+    initError:       (msg) => `Init error: ${msg}`,
+    thinking:        "Claude is thinking…",
+    send:            "Send",
+    sending:         "…",
+    serverUnreach:   "Cannot reach server. Is start.sh running?",
+    httpError:       (status) => `HTTP error ${status}`,
+    sectionLabel:    "Section",
+    selectionLabel:  "Selected text",
+    sectionTarget:   "Target section",
+    optional:        "(optional)",
+    refresh:         "↻ Refresh",
+    placeholder:     "Ask Claude a question…",
+  },
+  de: {
+    noText:          "(kein Text ausgewählt)",
+    docNotLoaded:    "Dokument nicht geladen",
+    loadBtn:         "Dokument laden",
+    reading:         "Dokument wird gelesen…",
+    readError:       "Fehler beim Lesen des Dokuments",
+    serverError:     "Lokaler Server nicht erreichbar. Starten Sie start.sh.",
+    emptyDoc:        "Leeres Dokument",
+    loadedDoc:       (sections, pages, mode) =>
+      `Dokument geladen — ${sections} Abschnitte · ${pages} Seiten · Modus ${mode}`,
+    loadFailed:      "Laden fehlgeschlagen",
+    initError:       (msg) => `Initialisierungsfehler: ${msg}`,
+    thinking:        "Claude denkt…",
+    send:            "Senden",
+    sending:         "…",
+    serverUnreach:   "Server nicht erreichbar. Läuft start.sh?",
+    httpError:       (status) => `HTTP-Fehler ${status}`,
+    sectionLabel:    "Abschnitt",
+    selectionLabel:  "Ausgewählter Text",
+    sectionTarget:   "Zielabschnitt",
+    optional:        "(optional)",
+    refresh:         "↻ Aktualisieren",
+    placeholder:     "Stellen Sie Claude eine Frage…",
+  },
+  es: {
+    noText:          "(ningún texto seleccionado)",
+    docNotLoaded:    "Documento no cargado",
+    loadBtn:         "Cargar documento",
+    reading:         "Leyendo documento…",
+    readError:       "Error al leer el documento",
+    serverError:     "Servidor local no disponible. Ejecute start.sh.",
+    emptyDoc:        "Documento vacío",
+    loadedDoc:       (sections, pages, mode) =>
+      `Documento cargado — ${sections} secciones · ${pages} páginas · modo ${mode}`,
+    loadFailed:      "Error al cargar",
+    initError:       (msg) => `Error de inicialización: ${msg}`,
+    thinking:        "Claude está pensando…",
+    send:            "Enviar",
+    sending:         "…",
+    serverUnreach:   "No se puede conectar al servidor. ¿Está ejecutándose start.sh?",
+    httpError:       (status) => `Error HTTP ${status}`,
+    sectionLabel:    "Sección",
+    selectionLabel:  "Texto seleccionado",
+    sectionTarget:   "Sección objetivo",
+    optional:        "(opcional)",
+    refresh:         "↻ Actualizar",
+    placeholder:     "Haga una pregunta a Claude…",
+  },
+};
+
+let t = STRINGS.en; // active locale strings, set in initLocale()
+
+function initLocale() {
+  const locale = (Office.context.displayLanguage || "en-US").substring(0, 2).toLowerCase();
+  t = STRINGS[locale] || STRINGS.en;
+  // Apply static labels to DOM
+  document.getElementById("load-doc-btn").textContent   = t.loadBtn;
+  document.getElementById("init-label").textContent     = t.docNotLoaded;
+  document.getElementById("refresh-btn").textContent    = t.refresh;
+  document.getElementById("question").placeholder       = t.placeholder;
+  document.getElementById("ask-btn").textContent        = t.send;
+  // Labels and hints
+  const labels = document.querySelectorAll("[data-i18n]");
+  labels.forEach((el) => {
+    const key = el.dataset.i18n;
+    if (t[key]) el.textContent = t[key];
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Office theme — use isDarkTheme as reliable signal, apply our own palette
+// ---------------------------------------------------------------------------
+function applyTheme(isDark) {
+  document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
 }
 
 function initTheme() {
   try {
     const theme = Office.context.officeTheme;
-    if (theme) {
-      applyOfficeTheme(theme);
-      // Listen for theme changes (user switches dark/light in Office settings)
+    if (theme && typeof theme.isDarkTheme !== "undefined") {
+      applyTheme(theme.isDarkTheme);
       Office.context.officeTheme.addHandlerAsync(
         Office.EventType.OfficeThemeChanged,
-        (e) => applyOfficeTheme(e.officeTheme)
+        (e) => applyTheme(e.officeTheme && e.officeTheme.isDarkTheme)
       );
+      return;
+    }
+    // isDarkTheme not available — try to infer from bodyBackgroundColor luminance
+    if (theme && theme.bodyBackgroundColor) {
+      const hex = theme.bodyBackgroundColor.replace("#", "");
+      const r = parseInt(hex.substring(0, 2), 16);
+      const g = parseInt(hex.substring(2, 4), 16);
+      const b = parseInt(hex.substring(4, 6), 16);
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      applyTheme(luminance < 0.5);
     }
   } catch {
-    // officeTheme not available (Word Online / Mac) — CSS media query fallback applies
+    // Fallback: CSS prefers-color-scheme media query handles it automatically
   }
 }
 
 // ---------------------------------------------------------------------------
-// Init
+// Office.onReady
 // ---------------------------------------------------------------------------
 Office.onReady((info) => {
   if (info.host === Office.HostType.Word) {
     initTheme();
+    initLocale();
+
     document.getElementById("ask-btn").addEventListener("click", onAsk);
     document.getElementById("refresh-btn").addEventListener("click", refreshSelection);
     document.getElementById("load-doc-btn").addEventListener("click", loadDocument);
@@ -51,7 +177,6 @@ Office.onReady((info) => {
       field.value = "";
       delete field.dataset.userEdited;
     });
-
     document.getElementById("section-number").addEventListener("input", (e) => {
       if (e.target.value.trim()) {
         e.target.dataset.userEdited = "1";
@@ -77,13 +202,10 @@ Office.onReady((info) => {
 async function checkServer() {
   try {
     const resp = await fetch(`${SERVER}/health`);
-    if (resp.ok) {
-      setIndicator("idle");
-      return true;
-    }
+    if (resp.ok) { setIndicator("idle"); return true; }
   } catch {}
   setIndicator("error");
-  showError("Serveur local non joignable. Lancez start.sh et réessayez.");
+  showError(t.serverError);
   return false;
 }
 
@@ -91,7 +213,7 @@ async function checkServer() {
 // Document loading
 // ---------------------------------------------------------------------------
 async function loadDocument() {
-  setInitLabel("Lecture du document…", "loading");
+  setInitLabel(t.reading, "loading");
   setIndicator("busy");
   hideError();
 
@@ -99,15 +221,15 @@ async function loadDocument() {
   try {
     fullText = await readFullDocument();
   } catch (err) {
-    setInitLabel("Erreur de lecture du document", "");
+    setInitLabel(t.readError, "");
     setIndicator("error");
-    showError("Impossible de lire le document Word.");
+    showError(t.readError);
     console.error("readFullDocument error:", err);
     return;
   }
 
   if (!fullText.trim()) {
-    setInitLabel("Document vide", "");
+    setInitLabel(t.emptyDoc, "");
     setIndicator("idle");
     return;
   }
@@ -121,31 +243,25 @@ async function loadDocument() {
 
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
-      throw new Error(err.detail || `HTTP ${resp.status}`);
+      throw new Error(err.detail || t.httpError(resp.status));
     }
 
     const data = await resp.json();
-    sessionId = data.session_id;
-    docMode = data.mode;
+    sessionId    = data.session_id;
+    docMode      = data.mode;
     sectionCount = data.section_count;
     knownSections = data.structure || [];
 
-    const modeLabel = data.mode === "summarized" ? "résumé" : "complet";
-    const label = `${data.section_count} sections · ${data.page_count} pages · mode ${modeLabel}`;
-    setInitLabel(`Document chargé — ${label}`, "ready");
+    setInitLabel(t.loadedDoc(data.section_count, data.page_count, data.mode), "ready");
     setDocStatus(`${data.page_count}p`);
     setIndicator("idle");
-
-    // Clear previous chat on reload
     document.getElementById("chat-history").innerHTML = "";
-
-    // Start auto-detecting current section from cursor position
     startSectionDetection();
 
   } catch (err) {
-    setInitLabel("Échec du chargement", "");
+    setInitLabel(t.loadFailed, "");
     setIndicator("error");
-    showError(`Erreur initialisation : ${err.message}`);
+    showError(t.initError(err.message));
     console.error("loadDocument error:", err);
   }
 }
@@ -170,9 +286,8 @@ async function refreshSelection() {
       const sel = context.document.getSelection();
       sel.load("text");
       await context.sync();
-      const text = sel.text.trim();
       document.getElementById("selection-preview").textContent =
-        text || "(aucun texte sélectionné)";
+        sel.text.trim() || t.noText;
     });
   } catch (err) {
     console.error("refreshSelection error:", err);
@@ -198,7 +313,6 @@ async function onAsk() {
   appendMessage("user", question, sectionNumber);
   questionEl.value = "";
 
-  // Create the Claude response bubble immediately (empty, will fill via streaming)
   const claudeEl = createStreamingBubble();
 
   try {
@@ -216,7 +330,7 @@ async function onAsk() {
     if (!resp.ok) {
       claudeEl.remove();
       const err = await resp.json().catch(() => ({}));
-      showError(err.detail || `Erreur HTTP ${resp.status}`);
+      showError(err.detail || t.httpError(resp.status));
       setIndicator("error");
       return;
     }
@@ -228,16 +342,14 @@ async function onAsk() {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
-      buffer = lines.pop(); // keep incomplete last line
+      buffer = lines.pop();
 
       for (const line of lines) {
         if (!line.startsWith("data: ")) continue;
         try {
           const event = JSON.parse(line.slice(6));
-
           if (event.type === "token") {
             appendTokenToStream(claudeEl, event.text);
           } else if (event.type === "done") {
@@ -251,10 +363,9 @@ async function onAsk() {
         } catch {}
       }
     }
-
   } catch (err) {
     claudeEl.remove();
-    showError("Impossible de joindre le serveur. Est-ce que start.sh tourne ?");
+    showError(t.serverUnreach);
     setIndicator("error");
     console.error("fetch /ask-stream error:", err);
   } finally {
@@ -267,60 +378,42 @@ async function onAsk() {
 // ---------------------------------------------------------------------------
 function startSectionDetection() {
   if (sectionDetectionInterval) clearInterval(sectionDetectionInterval);
-  // Poll every 2 seconds — lightweight, just reads cursor paragraph
   sectionDetectionInterval = setInterval(detectCurrentSection, 2000);
 }
 
 async function detectCurrentSection() {
   if (!knownSections.length) return;
-
   try {
     await Word.run(async (context) => {
       const sel = context.document.getSelection();
-      // Expand to the enclosing paragraph
       const para = sel.paragraphs.getFirst();
       para.load("text");
       await context.sync();
-
       const detectedNumber = findSectionNumberInText(para.text);
-
       if (detectedNumber) {
         const field = document.getElementById("section-number");
-        // Only update if the user hasn't typed something manually
-        if (!field.dataset.userEdited) {
-          field.value = detectedNumber;
-        }
+        if (!field.dataset.userEdited) field.value = detectedNumber;
       }
     });
-  } catch {
-    // Silently ignore — cursor may be in a non-text area
-  }
+  } catch {}
 }
 
 function findSectionNumberInText(text) {
   if (!text || !knownSections.length) return null;
-
   const trimmed = text.trim();
-
-  // 1. Direct match against known section titles
   for (const s of knownSections) {
     if (s.title && trimmed.toLowerCase().includes(s.title.toLowerCase()) && s.title.length > 3) {
       return s.number;
     }
   }
-
-  // 2. Match the section number itself at start of line
-  // e.g. "1.2", "Article 3", "Section 2.1"
   const m = trimmed.match(
-    /^(?:(?:article|section|chapitre|chapter|partie|part)\s+(\d+(?:\.\d+)*)|((\d+(?:\.\d+)*)[\.\s\-–]))/i
+    /^(?:(?:article|section|chapitre|chapter|partie|part|abschnitt|sección)\s+(\d+(?:\.\d+)*)|((\d+(?:\.\d+)*)[\.\s\-–]))/i
   );
   if (m) {
     const candidate = m[1] || m[3];
-    // Verify it exists in our known sections
     const found = knownSections.find((s) => s.number === candidate);
     if (found) return candidate;
   }
-
   return null;
 }
 
@@ -336,7 +429,6 @@ function createStreamingBubble() {
   body.className = "stream-body";
   el.appendChild(body);
 
-  // Blinking cursor
   const cursor = document.createElement("span");
   cursor.className = "stream-cursor";
   cursor.textContent = "▋";
@@ -356,14 +448,13 @@ function finalizeStreamBubble(el, duration_ms) {
   el.classList.remove("streaming");
   const cursor = el.querySelector(".stream-cursor");
   if (cursor) cursor.remove();
-
   const meta = document.createElement("div");
   meta.className = "chat-meta";
   meta.textContent = `${(duration_ms / 1000).toFixed(1)}s`;
   el.appendChild(meta);
 }
 
-function appendMessage(role, text, sectionNumber = null, duration_ms = undefined) {
+function appendMessage(role, text, sectionNumber = null) {
   const chat = document.getElementById("chat-history");
   const el = document.createElement("div");
   el.className = `chat-message ${role}`;
@@ -371,20 +462,13 @@ function appendMessage(role, text, sectionNumber = null, duration_ms = undefined
   if (sectionNumber && role === "user") {
     const tag = document.createElement("div");
     tag.className = "chat-section-tag";
-    tag.textContent = `Section ${sectionNumber}`;
+    tag.textContent = `${t.sectionLabel} ${sectionNumber}`;
     el.appendChild(tag);
   }
 
   const body = document.createElement("span");
   body.textContent = text;
   el.appendChild(body);
-
-  if (role === "claude" && duration_ms !== undefined) {
-    const meta = document.createElement("div");
-    meta.className = "chat-meta";
-    meta.textContent = `${(duration_ms / 1000).toFixed(1)}s`;
-    el.appendChild(meta);
-  }
 
   chat.appendChild(el);
   el.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -394,7 +478,7 @@ function appendMessage(role, text, sectionNumber = null, duration_ms = undefined
 function setLoading(isLoading) {
   const btn = document.getElementById("ask-btn");
   btn.disabled = isLoading;
-  btn.textContent = isLoading ? "…" : "Envoyer";
+  btn.textContent = isLoading ? t.sending : t.send;
 }
 
 function setIndicator(state) {

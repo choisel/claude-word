@@ -1,36 +1,40 @@
 /* ---------------------------------------------------------------------------
-   CSS custom properties — set by JS from Office.context.officeTheme.
-   Fallbacks cover Word Online and systems without officeTheme support.
+   CSS custom properties
+   --theme-* are set by JS. All UI tokens derive from them.
 --------------------------------------------------------------------------- */
 :root {
-  /* Office theme colors (overridden at runtime by applyOfficeTheme()) */
-  --office-body-bg:    #f3f3f3;
-  --office-body-fg:    #1a1a1a;
-  --office-ctrl-bg:    #ffffff;
-  --office-ctrl-fg:    #1a1a1a;
+  /* Light theme defaults */
+  --theme-bg:      #f3f3f3;
+  --theme-fg:      #1a1a1a;
+  --theme-surface: #ffffff;
+  --theme-sfg:     #1a1a1a;
 
-  /* Derived UI tokens */
-  --bg:          var(--office-body-bg);
-  --fg:          var(--office-body-fg);
-  --surface:     var(--office-ctrl-bg);
-  --surface-fg:  var(--office-ctrl-fg);
-  --border:      color-mix(in srgb, var(--office-body-fg) 15%, transparent);
-  --muted:       color-mix(in srgb, var(--office-body-fg) 45%, transparent);
-  --subtle:      color-mix(in srgb, var(--office-body-fg) 25%, transparent);
+  /* Derived tokens */
+  --border:      color-mix(in srgb, var(--theme-fg) 15%, transparent);
+  --muted:       color-mix(in srgb, var(--theme-fg) 45%, transparent);
+  --subtle:      color-mix(in srgb, var(--theme-fg) 25%, transparent);
 
-  /* Accent — Claude brand colour, stays consistent across themes */
+  /* Accent — Claude brand, constant across themes */
   --accent:      #cc785c;
   --accent-dark: #b5664b;
-  --accent-pale: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  --accent-pale: color-mix(in srgb, var(--accent) 12%, var(--theme-surface));
 }
 
-/* Dark-mode fallback when Office theme API is unavailable */
+/* Dark theme — applied by JS via [data-theme="dark"] */
+[data-theme="dark"] {
+  --theme-bg:      #1f1f1f;
+  --theme-fg:      #e8e8e8;
+  --theme-surface: #2d2d2d;
+  --theme-sfg:     #e8e8e8;
+}
+
+/* Fallback when Office API unavailable */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-office-theme]) {
-    --office-body-bg:  #1f1f1f;
-    --office-body-fg:  #e8e8e8;
-    --office-ctrl-bg:  #2d2d2d;
-    --office-ctrl-fg:  #e8e8e8;
+  :root:not([data-theme]) {
+    --theme-bg:      #1f1f1f;
+    --theme-fg:      #e8e8e8;
+    --theme-surface: #2d2d2d;
+    --theme-sfg:     #e8e8e8;
   }
 }
 
@@ -42,8 +46,8 @@
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 13px;
-  background: var(--bg);
-  color: var(--fg);
+  background: var(--theme-bg);
+  color: var(--theme-fg);
   height: 100vh;
   overflow: hidden;
   transition: background 0.2s, color 0.2s;
@@ -83,7 +87,6 @@ header {
   color: rgba(255,255,255,0.75);
 }
 
-/* Status indicator dot */
 .status-idle  { width: 8px; height: 8px; border-radius: 50%; background: #6fcf6f; }
 .status-busy  { width: 8px; height: 8px; border-radius: 50%; background: #ffd966; animation: pulse 1s infinite; }
 .status-error { width: 8px; height: 8px; border-radius: 50%; background: #ff6b6b; }
@@ -94,13 +97,13 @@ header {
 }
 
 /* ---------------------------------------------------------------------------
-   Sections (init bar, selection, section targeting)
+   Init bar
 --------------------------------------------------------------------------- */
 #init-section {
   padding: 8px 14px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  background: var(--surface);
+  background: var(--theme-surface);
 }
 
 #init-bar {
@@ -119,10 +122,14 @@ header {
 #init-label.ready   { color: #4a9e4a; }
 #init-label.loading { color: var(--accent); font-style: italic; }
 
+/* ---------------------------------------------------------------------------
+   Selection & section targeting
+--------------------------------------------------------------------------- */
 #selection-section,
 #section-section {
   padding: 8px 14px;
   border-bottom: 1px solid var(--border);
+  background: var(--theme-bg);
   flex-shrink: 0;
 }
 
@@ -144,22 +151,19 @@ header {
 }
 
 #selection-preview {
-  background: var(--bg);
+  background: var(--theme-surface);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 12px;
   line-height: 1.5;
-  color: var(--surface-fg);
+  color: var(--theme-sfg);
   max-height: 70px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-/* ---------------------------------------------------------------------------
-   Section input
---------------------------------------------------------------------------- */
 #section-input-row {
   display: flex;
   gap: 6px;
@@ -168,8 +172,8 @@ header {
 
 #section-number {
   flex: 1;
-  background: var(--surface);
-  color: var(--surface-fg);
+  background: var(--theme-surface);
+  color: var(--theme-sfg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 5px 8px;
@@ -243,6 +247,7 @@ header {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  background: var(--theme-bg);
 }
 
 .chat-message {
@@ -262,15 +267,15 @@ header {
 }
 
 .chat-message.claude {
-  background: var(--surface);
-  color: var(--surface-fg);
+  background: var(--theme-surface);
+  color: var(--theme-sfg);
   border: 1px solid var(--border);
   align-self: flex-start;
   border-bottom-left-radius: 3px;
 }
 
 .chat-message.loading {
-  background: var(--bg);
+  background: var(--theme-surface);
   color: var(--muted);
   border: 1px solid var(--border);
   font-style: italic;
@@ -297,22 +302,19 @@ header {
   margin-left: 1px;
 }
 
-/* For streaming bubble the cursor should contrast on surface bg */
-.chat-message.claude .stream-cursor { color: var(--accent); }
-
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0; }
 }
 
 /* ---------------------------------------------------------------------------
-   Footer / input
+   Footer
 --------------------------------------------------------------------------- */
 footer {
   border-top: 1px solid var(--border);
   padding: 10px 14px;
   flex-shrink: 0;
-  background: var(--surface);
+  background: var(--theme-surface);
 }
 
 #input-area {
@@ -323,8 +325,8 @@ footer {
 
 #question {
   flex: 1;
-  background: var(--bg);
-  color: var(--fg);
+  background: var(--theme-bg);
+  color: var(--theme-fg);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 10px;
@@ -345,10 +347,10 @@ footer {
 #error-bar {
   margin-top: 8px;
   padding: 7px 10px;
-  background: color-mix(in srgb, #cc3333 10%, var(--surface));
+  background: color-mix(in srgb, #cc3333 10%, var(--theme-surface));
   border: 1px solid color-mix(in srgb, #cc3333 35%, transparent);
   border-radius: 6px;
-  color: #cc3333;
+  color: #e05555;
   font-size: 12px;
 }
 
