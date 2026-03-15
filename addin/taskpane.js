@@ -152,10 +152,11 @@ async function onAsk() {
   appendMessage("user", question, sectionNumber);
   questionEl.value = "";
 
-  const loadingEl = appendMessage("loading", "Claude réfléchit…");
+  // Create the Claude response bubble immediately (empty, will fill via streaming)
+  const claudeEl = createStreamingBubble();
 
   try {
-    const resp = await fetch(`${SERVER}/ask`, {
+    const resp = await fetch(`${SERVER}/ask-stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -166,25 +167,50 @@ async function onAsk() {
       }),
     });
 
-    loadingEl.remove();
-
     if (!resp.ok) {
+      claudeEl.remove();
       const err = await resp.json().catch(() => ({}));
       showError(err.detail || `Erreur HTTP ${resp.status}`);
       setIndicator("error");
       return;
     }
 
-    const data = await resp.json();
-    if (data.session_id) sessionId = data.session_id;
-    appendMessage("claude", data.answer, null, data.duration_ms);
-    setIndicator("idle");
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop(); // keep incomplete last line
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        try {
+          const event = JSON.parse(line.slice(6));
+
+          if (event.type === "token") {
+            appendTokenToStream(claudeEl, event.text);
+          } else if (event.type === "done") {
+            finalizeStreamBubble(claudeEl, event.duration_ms);
+            setIndicator("idle");
+          } else if (event.type === "error") {
+            claudeEl.remove();
+            showError(event.detail);
+            setIndicator("error");
+          }
+        } catch {}
+      }
+    }
 
   } catch (err) {
-    loadingEl.remove();
+    claudeEl.remove();
     showError("Impossible de joindre le serveur. Est-ce que start.sh tourne ?");
     setIndicator("error");
-    console.error("fetch /ask error:", err);
+    console.error("fetch /ask-stream error:", err);
   } finally {
     setLoading(false);
   }
@@ -193,6 +219,42 @@ async function onAsk() {
 // ---------------------------------------------------------------------------
 // UI helpers
 // ---------------------------------------------------------------------------
+function createStreamingBubble() {
+  const chat = document.getElementById("chat-history");
+  const el = document.createElement("div");
+  el.className = "chat-message claude streaming";
+
+  const body = document.createElement("span");
+  body.className = "stream-body";
+  el.appendChild(body);
+
+  // Blinking cursor
+  const cursor = document.createElement("span");
+  cursor.className = "stream-cursor";
+  cursor.textContent = "▋";
+  el.appendChild(cursor);
+
+  chat.appendChild(el);
+  el.scrollIntoView({ behavior: "smooth", block: "end" });
+  return el;
+}
+
+function appendTokenToStream(el, text) {
+  el.querySelector(".stream-body").textContent += text;
+  el.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+function finalizeStreamBubble(el, duration_ms) {
+  el.classList.remove("streaming");
+  const cursor = el.querySelector(".stream-cursor");
+  if (cursor) cursor.remove();
+
+  const meta = document.createElement("div");
+  meta.className = "chat-meta";
+  meta.textContent = `${(duration_ms / 1000).toFixed(1)}s`;
+  el.appendChild(meta);
+}
+
 function appendMessage(role, text, sectionNumber = null, duration_ms = undefined) {
   const chat = document.getElementById("chat-history");
   const el = document.createElement("div");

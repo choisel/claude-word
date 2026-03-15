@@ -221,6 +221,18 @@ header {
   text-align: right;
 }
 
+.stream-cursor {
+  display: inline-block;
+  color: #cc785c;
+  animation: blink 0.8s step-end infinite;
+  margin-left: 1px;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
 .chat-section-tag {
   font-size: 10px;
   color: #cc785c;
