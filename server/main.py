@@ -237,7 +237,7 @@ async def ask(req: AskRequest, request: Request):
     # Build prompt
     if session:
         history = session_module.get_relevant_history(session, section_sort_key)
-        prompt = doc_module.build_ask_prompt(session, req.question, req.section_number, history)
+        prompt = doc_module.build_ask_prompt(session, req.question, req.section_number, history, req.selected_text)
     else:
         # No session — fall back to simple prompt with selected text
         if req.selected_text.strip():
@@ -388,7 +388,7 @@ async def ask_stream(req: AskRequest, request: Request):
 
     if session:
         history = session_module.get_relevant_history(session, section_sort_key)
-        prompt = doc_module.build_ask_prompt(session, req.question, req.section_number, history)
+        prompt = doc_module.build_ask_prompt(session, req.question, req.section_number, history, req.selected_text)
     else:
         if req.selected_text.strip():
             prompt = f"Selected text:\n---\n{req.selected_text}\n---\n\nQuestion: {req.question}"

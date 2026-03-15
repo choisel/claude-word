@@ -170,7 +170,6 @@ Office.onReady((info) => {
 
     document.getElementById("ask-btn").addEventListener("click", onAsk);
     document.getElementById("load-doc-btn").addEventListener("click", loadDocument);
-    document.getElementById("selection-chip-clear").addEventListener("click", clearSelectionChip);
     document.getElementById("clear-section-btn").addEventListener("click", () => {
       const sel = document.getElementById("section-number");
       sel.value = "";
@@ -304,15 +303,29 @@ function checkPendingSelection() {
 }
 
 function showSelectionChip(text) {
-  const chip = document.getElementById("selection-chip");
-  document.getElementById("selection-chip-text").textContent = text;
-  chip.classList.remove("hidden");
+  let chip = document.getElementById("selection-chip");
+  if (!chip) {
+    chip = document.createElement("div");
+    chip.id = "selection-chip";
+    const span = document.createElement("span");
+    span.id = "selection-chip-text";
+    const btn = document.createElement("button");
+    btn.id = "selection-chip-clear";
+    btn.className = "btn-icon";
+    btn.title = "Effacer";
+    btn.textContent = "✕";
+    btn.addEventListener("click", clearSelectionChip);
+    chip.appendChild(span);
+    chip.appendChild(btn);
+    document.querySelector("footer").prepend(chip);
+  }
+  chip.querySelector("#selection-chip-text").textContent = text;
 }
 
 function clearSelectionChip() {
   pendingSelection = "";
-  document.getElementById("selection-chip").classList.add("hidden");
-  document.getElementById("selection-chip-text").textContent = "";
+  const chip = document.getElementById("selection-chip");
+  if (chip) chip.remove();
 }
 
 // ---------------------------------------------------------------------------

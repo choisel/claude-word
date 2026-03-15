@@ -137,6 +137,7 @@ def build_ask_prompt(
     question: str,
     section_number: Optional[str],
     history_exchanges: list,
+    selected_text: str = "",
 ) -> str:
     parts: list[str] = [
         "You are a document assistant. The user is working on a document in Microsoft Word. "
@@ -168,6 +169,9 @@ def build_ask_prompt(
             prefix = "User" if ex.role == "user" else "Assistant"
             history_lines.append(f"{prefix}: {ex.content}")
         parts.append("Previous exchanges:\n" + "\n".join(history_lines) + "\n")
+
+    if selected_text.strip():
+        parts.append(f"Selected text in document:\n---\n{selected_text}\n---\n")
 
     parts.append(f"Question: {question}")
     return "\n".join(parts)
