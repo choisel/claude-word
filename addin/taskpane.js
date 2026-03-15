@@ -7,6 +7,7 @@ let docMode = null;
 let sectionCount = 0;
 let knownSections = [];
 let sectionDetectionInterval = null;
+let documentLoaded = false;
 
 // ---------------------------------------------------------------------------
 // i18n — labels keyed by Office locale (2-letter prefix, fallback to "en")
@@ -35,6 +36,7 @@ const STRINGS = {
     optional:        "(optionnel)",
     refresh:         "↻ Actualiser",
     placeholder:     "Posez votre question à Claude…",
+    sectionAll:      "— document entier —",
   },
   en: {
     noText:          "(no text selected)",
@@ -59,6 +61,7 @@ const STRINGS = {
     optional:        "(optional)",
     refresh:         "↻ Refresh",
     placeholder:     "Ask Claude a question…",
+    sectionAll:      "— full document —",
   },
   de: {
     noText:          "(kein Text ausgewählt)",
@@ -83,6 +86,7 @@ const STRINGS = {
     optional:        "(optional)",
     refresh:         "↻ Aktualisieren",
     placeholder:     "Stellen Sie Claude eine Frage…",
+    sectionAll:      "— gesamtes Dokument —",
   },
   es: {
     noText:          "(ningún texto seleccionado)",
@@ -107,6 +111,7 @@ const STRINGS = {
     optional:        "(opcional)",
     refresh:         "↻ Actualizar",
     placeholder:     "Haga una pregunta a Claude…",
+    sectionAll:      "— documento completo —",
   },
 };
 
@@ -173,12 +178,12 @@ Office.onReady((info) => {
     document.getElementById("refresh-btn").addEventListener("click", refreshSelection);
     document.getElementById("load-doc-btn").addEventListener("click", loadDocument);
     document.getElementById("clear-section-btn").addEventListener("click", () => {
-      const field = document.getElementById("section-number");
-      field.value = "";
-      delete field.dataset.userEdited;
+      const sel = document.getElementById("section-number");
+      sel.value = "";
+      delete sel.dataset.userEdited;
     });
-    document.getElementById("section-number").addEventListener("input", (e) => {
-      if (e.target.value.trim()) {
+    document.getElementById("section-number").addEventListener("change", (e) => {
+      if (e.target.value) {
         e.target.dataset.userEdited = "1";
       } else {
         delete e.target.dataset.userEdited;
@@ -190,7 +195,9 @@ Office.onReady((info) => {
         onAsk();
       }
     });
+    document.getElementById("question").addEventListener("input", updateSendButton);
 
+    updateSendButton();
     refreshSelection();
     checkServer().then(() => loadDocument());
   }
@@ -213,6 +220,8 @@ async function checkServer() {
 // Document loading
 // ---------------------------------------------------------------------------
 async function loadDocument() {
+  documentLoaded = false;
+  updateSendButton();
   setInitLabel(t.reading, "loading");
   setIndicator("busy");
   hideError();
@@ -251,11 +260,14 @@ async function loadDocument() {
     docMode      = data.mode;
     sectionCount = data.section_count;
     knownSections = data.structure || [];
+    documentLoaded = true;
+    updateSendButton();
 
     setInitLabel(t.loadedDoc(data.section_count, data.page_count, data.mode), "ready");
     setDocStatus(`${data.page_count}p`);
     setIndicator("idle");
     document.getElementById("chat-history").innerHTML = "";
+    populateSectionDropdown(knownSections);
     startSectionDetection();
 
   } catch (err) {
@@ -477,8 +489,33 @@ function appendMessage(role, text, sectionNumber = null) {
 
 function setLoading(isLoading) {
   const btn = document.getElementById("ask-btn");
-  btn.disabled = isLoading;
   btn.textContent = isLoading ? t.sending : t.send;
+  if (isLoading) {
+    btn.disabled = true;
+  } else {
+    updateSendButton();
+  }
+}
+
+function updateSendButton() {
+  const btn = document.getElementById("ask-btn");
+  const question = document.getElementById("question").value.trim();
+  btn.disabled = !documentLoaded || !question;
+}
+
+function populateSectionDropdown(sections) {
+  const sel = document.getElementById("section-number");
+  sel.innerHTML = "";
+  const defaultOpt = document.createElement("option");
+  defaultOpt.value = "";
+  defaultOpt.textContent = t.sectionAll || "— document entier —";
+  sel.appendChild(defaultOpt);
+  for (const s of sections) {
+    const opt = document.createElement("option");
+    opt.value = s.number;
+    opt.textContent = s.title ? `${s.number} — ${s.title}` : s.number;
+    sel.appendChild(opt);
+  }
 }
 
 function setIndicator(state) {

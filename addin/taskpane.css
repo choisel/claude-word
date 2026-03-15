@@ -180,6 +180,7 @@ header {
   font-size: 12px;
   font-family: inherit;
   outline: none;
+  cursor: pointer;
   transition: border-color 0.15s;
 }
 
@@ -246,7 +247,6 @@ header {
   padding: 10px 14px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
   background: var(--theme-bg);
 }
 
@@ -257,6 +257,7 @@ header {
   line-height: 1.55;
   word-break: break-word;
   white-space: pre-wrap;
+  margin-bottom: 10px;
 }
 
 .chat-message.user {
