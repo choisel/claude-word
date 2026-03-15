@@ -5,6 +5,8 @@ const SERVER = "https://localhost:5000";
 let sessionId = null;
 let docMode = null;      // "full" | "summarized" | null
 let sectionCount = 0;
+let knownSections = [];  // [{number, title, sort_key}] from /init
+let sectionDetectionInterval = null;
 
 // ---------------------------------------------------------------------------
 // Init
@@ -15,7 +17,17 @@ Office.onReady((info) => {
     document.getElementById("refresh-btn").addEventListener("click", refreshSelection);
     document.getElementById("load-doc-btn").addEventListener("click", loadDocument);
     document.getElementById("clear-section-btn").addEventListener("click", () => {
-      document.getElementById("section-number").value = "";
+      const field = document.getElementById("section-number");
+      field.value = "";
+      delete field.dataset.userEdited;
+    });
+
+    document.getElementById("section-number").addEventListener("input", (e) => {
+      if (e.target.value.trim()) {
+        e.target.dataset.userEdited = "1";
+      } else {
+        delete e.target.dataset.userEdited;
+      }
     });
     document.getElementById("question").addEventListener("keydown", (e) => {
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -86,6 +98,7 @@ async function loadDocument() {
     sessionId = data.session_id;
     docMode = data.mode;
     sectionCount = data.section_count;
+    knownSections = data.structure || [];
 
     const modeLabel = data.mode === "summarized" ? "résumé" : "complet";
     const label = `${data.section_count} sections · ${data.page_count} pages · mode ${modeLabel}`;
@@ -95,6 +108,9 @@ async function loadDocument() {
 
     // Clear previous chat on reload
     document.getElementById("chat-history").innerHTML = "";
+
+    // Start auto-detecting current section from cursor position
+    startSectionDetection();
 
   } catch (err) {
     setInitLabel("Échec du chargement", "");
@@ -214,6 +230,68 @@ async function onAsk() {
   } finally {
     setLoading(false);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Section auto-detection
+// ---------------------------------------------------------------------------
+function startSectionDetection() {
+  if (sectionDetectionInterval) clearInterval(sectionDetectionInterval);
+  // Poll every 2 seconds — lightweight, just reads cursor paragraph
+  sectionDetectionInterval = setInterval(detectCurrentSection, 2000);
+}
+
+async function detectCurrentSection() {
+  if (!knownSections.length) return;
+
+  try {
+    await Word.run(async (context) => {
+      const sel = context.document.getSelection();
+      // Expand to the enclosing paragraph
+      const para = sel.paragraphs.getFirst();
+      para.load("text");
+      await context.sync();
+
+      const detectedNumber = findSectionNumberInText(para.text);
+
+      if (detectedNumber) {
+        const field = document.getElementById("section-number");
+        // Only update if the user hasn't typed something manually
+        if (!field.dataset.userEdited) {
+          field.value = detectedNumber;
+        }
+      }
+    });
+  } catch {
+    // Silently ignore — cursor may be in a non-text area
+  }
+}
+
+function findSectionNumberInText(text) {
+  if (!text || !knownSections.length) return null;
+
+  const trimmed = text.trim();
+
+  // 1. Direct match against known section titles
+  for (const s of knownSections) {
+    if (s.title && trimmed.toLowerCase().includes(s.title.toLowerCase()) && s.title.length > 3) {
+      return s.number;
+    }
+  }
+
+  // 2. Match the section number itself at start of line
+  // e.g. "1.2", "Article 3", "Section 2.1"
+  const m = trimmed.match(
+    /^(?:(?:article|section|chapitre|chapter|partie|part)\s+(\d+(?:\.\d+)*)|((\d+(?:\.\d+)*)[\.\s\-–]))/i
+  );
+  if (m) {
+    const candidate = m[1] || m[3];
+    // Verify it exists in our known sections
+    const found = knownSections.find((s) => s.number === candidate);
+    if (found) return candidate;
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
