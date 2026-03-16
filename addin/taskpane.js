@@ -312,7 +312,7 @@ function showSelectionChip(text) {
     const btn = document.createElement("button");
     btn.id = "selection-chip-clear";
     btn.className = "btn-icon";
-    btn.title = "Effacer";
+    btn.title = "Clear";
     btn.textContent = "✕";
     btn.addEventListener("click", clearSelectionChip);
     chip.appendChild(span);

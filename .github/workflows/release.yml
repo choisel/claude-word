@@ -93,20 +93,20 @@ jobs:
             ## Installation
 
             ### macOS
-            1. Télécharge `Claude Word Assistant.zip`
-            2. Dézippe → `Claude Word Assistant.app`
-            3. Déplace dans `/Applications`
-            4. Double-clic pour lancer
+            1. Download `Claude Word Assistant.zip`
+            2. Unzip → `Claude Word Assistant.app`
+            3. Move to `/Applications`
+            4. Double-click to launch
 
             ### Windows
-            1. Télécharge `Claude Word Assistant (Windows).zip`
-            2. Dézippe le dossier
-            3. Lance `ClaudeWordAssistant.exe`
-            4. Suis les instructions de première configuration
-            5. Redémarre Word → Insertion → Compléments → Mes compléments → Dossier partagé
+            1. Download `Claude Word Assistant (Windows).zip`
+            2. Unzip the folder
+            3. Run `ClaudeWordAssistant.exe`
+            4. Follow the first-time setup instructions
+            5. Restart Word → Insert → Add-ins → My Add-ins → Shared Folder
 
             ---
-            **Prérequis :** [Claude CLI](https://claude.ai/download) installé et connecté.
+            **Requirement:** [Claude CLI](https://claude.ai/download) installed and signed in.
           files: |
             Claude Word Assistant.zip
             Claude Word Assistant (Windows).zip

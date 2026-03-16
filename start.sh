@@ -5,11 +5,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PID_FILE="$SCRIPT_DIR/server/server.pid"
 LOG_FILE="$SCRIPT_DIR/server/logs/server.log"
 
-# Déjà en cours ?
+# Already running?
 if [ -f "$PID_FILE" ]; then
   OLD_PID=$(cat "$PID_FILE")
   if kill -0 "$OLD_PID" 2>/dev/null; then
-    echo "Le serveur tourne déjà (PID $OLD_PID). Lance stop.sh pour l'arrêter."
+    echo "Server already running (PID $OLD_PID). Run stop.sh to stop it."
     exit 1
   else
     rm "$PID_FILE"
@@ -28,6 +28,6 @@ nohup uvicorn main:app \
   >> "$LOG_FILE" 2>&1 &
 
 echo $! > "$PID_FILE"
-echo "Serveur démarré (PID $(cat $PID_FILE))"
-echo "Logs : $LOG_FILE"
-echo "       tail -f $LOG_FILE"
+echo "Server started (PID $(cat $PID_FILE))"
+echo "Logs: $LOG_FILE"
+echo "      tail -f $LOG_FILE"
