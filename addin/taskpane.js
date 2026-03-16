@@ -459,7 +459,7 @@ function createStreamingBubble() {
   const el = document.createElement("div");
   el.className = "chat-message claude streaming";
 
-  const body = document.createElement("span");
+  const body = document.createElement("div");
   body.className = "stream-body";
   el.appendChild(body);
 
@@ -474,6 +474,7 @@ function createStreamingBubble() {
 }
 
 function appendTokenToStream(el, text) {
+  // Accumulate raw text during streaming — render markdown only at finalization
   el.querySelector(".stream-body").textContent += text;
   el.scrollIntoView({ behavior: "smooth", block: "end" });
 }
@@ -482,6 +483,14 @@ function finalizeStreamBubble(el, duration_ms) {
   el.classList.remove("streaming");
   const cursor = el.querySelector(".stream-cursor");
   if (cursor) cursor.remove();
+
+  // Render accumulated plain text as markdown
+  const body = el.querySelector(".stream-body");
+  const raw = body.textContent;
+  if (typeof marked !== "undefined") {
+    body.innerHTML = marked.parse(raw);
+  }
+
   const meta = document.createElement("div");
   meta.className = "chat-meta";
   meta.textContent = `${(duration_ms / 1000).toFixed(1)}s`;
